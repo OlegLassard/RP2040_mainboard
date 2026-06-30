@@ -27,7 +27,7 @@ const uint8_t M2_VREF = 12;
 
 // --- НАСТРОЙКИ ЯРКОСТИ, ТОКА И ПРОТОКОЛА UART ---
 #define BRIGHTNESS_STEP 0.02f 
-#define MOTOR_CURRENT_A 1.0f  
+#define MOTOR_CURRENT_A 1.3f  
 
 #define OPEN 1
 #define CLOSE -1
@@ -46,6 +46,8 @@ uint8_t target_LED1 = 0;
 uint8_t target_LED2 = 0; 
 
 float globalBrightness = 0.0; 
+float BrightnessRGB = 0.0; 
+float BrightnessSide = 0.0; 
 bool needUpdate = true;       
 
 // Переменные для обработки кнопок-триггеров
@@ -141,6 +143,10 @@ void sendResponse() {
     // Байт 43: Интенсивность света (0-100%)
     txBuffer[43] = (uint8_t)(globalBrightness * 100);
 
+    //Затычки для управления яркостью RGB и боковых светодиодов
+    txBuffer[42] = (uint8_t)(BrightnessRGB * 100);
+    txBuffer[44] = (uint8_t)(BrightnessSide * 100);
+
     // Байты 54 и 55: Угол наклона по оси X (знаковое 16-битное число)
     // Разбиваем на два байта: 54 - старший (High), 55 - младший (Low)
     txBuffer[54] = (currentAngleX >> 8) & 0xFF;
@@ -208,6 +214,39 @@ void handleUART() {
                     needUpdate = true;
                 }
             }
+
+            //Затычка для управления яркостью RGB
+            if (rxBuffer[16] == 0x01) {
+                uint8_t reg3 = rxBuffer[3];
+                
+                if ((reg3 & 0x10) && (reg3 & 0x40)) {
+                    if (BrightnessRGB > 0.0f) BrightnessRGB = 0.0f;
+                    else BrightnessRGB = 1.0f;
+                } else {
+                    if (reg3 & 0x10) BrightnessRGB += BRIGHTNESS_STEP;
+                    if (reg3 & 0x40) BrightnessRGB -= BRIGHTNESS_STEP;
+                }
+
+                if (BrightnessRGB > 1.0f) BrightnessRGB = 1.0f;
+                if (BrightnessRGB < 0.0f) BrightnessRGB = 0.0f;
+            }
+
+            //Затычка для управления яркостью боковых светодиодов
+            if (rxBuffer[16] == 0x05) {
+                uint8_t reg3 = rxBuffer[3];
+                
+                if ((reg3 & 0x10) && (reg3 & 0x40)) {
+                    if (BrightnessSide > 0.0f) BrightnessSide = 0.0f;
+                    else BrightnessSide = 1.0f;
+                } else {
+                    if (reg3 & 0x10) BrightnessSide += BRIGHTNESS_STEP;
+                    if (reg3 & 0x40) BrightnessSide -= BRIGHTNESS_STEP;
+                }
+
+                if (BrightnessSide > 1.0f) BrightnessSide = 1.0f;
+                if (BrightnessSide < 0.0f) BrightnessSide = 0.0f;
+            }
+
 
             // --- 5. Управление моторами ---
             int dirM1 = 0; 
